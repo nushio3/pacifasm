@@ -21,14 +21,14 @@ exec :: SInst -> SRegArray -> Symbolic SRegArray
 exec inst rs = do
   let opCode = inst `shiftR` 4
       arg  = inst .&. 0xf
-      lhs  = select rs 0 arg
-      lhs2 = select rs 0 ((arg+1) `sDiv` nReg)
+      rhs  = select rs 0 arg
+      rhs2 = select rs 0 ((arg+1) `sDiv` nReg)
 
       rsTail = tail rs
       rsA = head rs
       xchResults :: [SRegArray]
       xchResults =
-        [ (lhs : ) $ drop 1 $
+        [ (rhs : ) $ drop 1 $
           take i rs ++ [rsA] ++ drop (i+1) rs
         | i<-[0..nReg-1]
         ]
@@ -40,15 +40,15 @@ exec inst rs = do
         , -- Imh
           ((rsA .&. 0x0f) .|. (arg `shiftL` 4)) : rsTail
         , -- Cpy
-          lhs : rsTail
+          rhs : rsTail
         , -- Xch
           select xchResults rs arg
         , -- Lnd
-          (rsA .&. lhs) : rsTail
+          (rsA .&. rhs) : rsTail
         , -- Lor
-          (rsA .|. lhs) : rsTail
+          (rsA .|. rhs) : rsTail
         , -- Lxr
-          (rsA `xor` lhs) : rsTail
+          (rsA `xor` rhs) : rsTail
         , -- Sfr
           (rsA `sbvShiftRight` arg) : rsTail
         , -- Sfl
@@ -58,13 +58,13 @@ exec inst rs = do
         , -- Dec
           (rsA - arg) : rsTail
         , -- Add
-          (rsA + lhs) : rsTail
+          (rsA + rhs) : rsTail
         , -- Sub
-          (rsA - lhs) : rsTail
+          (rsA - rhs) : rsTail
         , -- Mul
-          (rsA * lhs) : rsTail
+          (rsA * rhs) : rsTail
         , -- Fma
-          (rsA + lhs*lhs2) : rsTail
+          (rsA + rhs*rhs2) : rsTail
         ]
   return $ select cands rs opCode
 

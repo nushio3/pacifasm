@@ -46,7 +46,7 @@ spec = do
         return $ allEqual rs1' rs1
     
   describe "Cpy" $ do
-    it "copies the lhs to e0x." $ do
+    it "copies the rhs to e0x." $ do
       shouldProve $ do
         rs0 <- symbolicRegs       
         n <- SBV.sWord8 "n"   
@@ -58,7 +58,7 @@ spec = do
         return $ allEqual rs1' rs1
     
   describe "Xch" $ do
-    it "exchanges the lhs and e0x." $ do
+    it "exchanges the rhs and e0x." $ do
       shouldProve $ do
         rs0 <- symbolicRegs       
         n <- SBV.sWord8 "n"   
