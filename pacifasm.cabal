@@ -18,6 +18,7 @@ library
   exposed-modules:     Asm
   hs-source-dirs:      src
   build-depends:      
-    base ==4.6.*, 
-    sbv ==2.10.*, 
-    hspec ==1.5.*
+    base ==4.*, 
+    sbv >=2.10,
+    hspec >=1.5,
+    lens >= 3.9.0.2
