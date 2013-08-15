@@ -1,5 +1,5 @@
+import Instack
 import FromProp
-
 import Data.SBV
 
 main :: IO ()

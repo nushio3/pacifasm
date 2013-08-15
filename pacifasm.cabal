@@ -28,3 +28,18 @@ library
     safe,
     sbv >=2.10
 
+executable conditional
+  hs-source-dirs: exe-src
+  main-is: conditional.hs
+  build-depends:      
+    base ==4.*, 
+    pacifasm,
+    sbv >=2.10
+
+executable popcount
+  hs-source-dirs: exe-src
+  main-is: popcount.hs
+  build-depends:      
+    base ==4.*, 
+    pacifasm,
+    sbv >=2.10
