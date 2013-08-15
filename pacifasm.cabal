@@ -59,3 +59,19 @@ executable p22
     base ==4.*, 
     pacifasm,
     sbv >=2.10
+
+executable p1
+  hs-source-dirs: exe-src
+  main-is: p1.hs
+  build-depends:      
+    base ==4.*, 
+    pacifasm,
+    sbv >=2.10
+
+executable multiply45
+  hs-source-dirs: exe-src
+  main-is: multiply45.hs
+  build-depends:      
+    base ==4.*, 
+    pacifasm,
+    sbv >=2.10
