@@ -17,6 +17,7 @@ cabal-version:       >=1.8
 library
   exposed-modules: 
     Asm
+    FromProp
     Instack
   hs-source-dirs:      src
   build-depends:      

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, TupleSections #-}
+{-# LANGUAGE TemplateHaskell, TupleSections, TypeFamilies #-}
 
 module Instack where
 
@@ -9,8 +9,8 @@ import Control.Lens.TH
 import Data.SBV
 import Text.Printf
 
-type SInst = SWord8
-type SVal = SWord32
+
+data ReservedOp = Alpha
 
 data Op 
   = Imm | Jmp 
@@ -38,16 +38,32 @@ parseArg Xor x = Binary x
 parseArg Plus x = Binary x
 parseArg If0 x = let (y,z) = split x in Triary y z
 
+type SInst = SWord8
+type SVal= SWord32
+type CInst = Word8
+type CVal= Word32
+     
 
-data ReservedOp = Alpha
+type SProgram = Program SInst SVal
 
-data SProgram = SProgram
+data Program instType valType = Program
   { _instructionSet ::[Op]
-  , _programLines :: [Either ReservedOp (SInst, SVal)]
+  , _programLines :: [Either ReservedOp (instType, valType)]
   }
   
-makeLenses ''SProgram
+makeLenses ''Program
   
+symbolize :: Program CInst CVal -> Program SInst SVal
+symbolize = programLines %~ (map go)
+  where
+    go (Left x) = Left x
+    go (Right (a,b)) = Right (fromIntegral a, fromIntegral b)
+             
+readProgram :: String -> Maybe (Program CInst CVal)
+readProgram str = 
+  where
+    
+                       
 genProgram :: Int -> [Op] -> Symbolic SProgram
 genProgram lnSize instSet = do
   let instSetSize = length instSet
@@ -60,9 +76,9 @@ genProgram lnSize instSet = do
           arg  <- exists $ printf "arg-%d" ln
           constrain $ inst .< fromIntegral instSetSize
           return $ Right (inst,arg)
-  return $ SProgram instSet pls
+  return $ Program instSet pls
   
-behave :: SProgram -> (SVal, SVal) -> Symbolic SBool
+behave :: Program SInst SVal -> (SVal, SVal) -> Symbolic SBool
 behave prog (alpha, beta) = do
   let progLines = prog^.programLines 
       instSet = prog^.instructionSet
