@@ -147,27 +147,29 @@ behave prog runTag (alpha, beta) = do
     case pl of
       Left Alpha -> constrain $ ret .== alpha
       Right (inst, arg) -> constrain $ 
-        ret .== select (map retCand instSet) 0 inst
+        select (map retCand instSet) false inst
         where
           retVarsL = take ln retVars
           iVal = select retVarsL 0 (fromIntegral $ ln - 1 :: SWord8)
           xVal = select retVarsL 0 arg
-          (aVal, bVal) = let (a,b) = split arg in
-                             (select retVarsL 0 (extend(a::SWord16))
-                             ,select retVarsL 0 (extend(b::SWord16)))
+          (a,b) = split arg 
+          (aVal, bVal) =(select retVarsL 0 (extend(a::SWord16))
+                        ,select retVarsL 0 (extend(b::SWord16)))
+          thmBinary = arg .< fromIntegral ln
+          thmTriary = a .< fromIntegral ln &&& b .< fromIntegral ln
           retCand op = case op of
-            Imm x -> fromIntegral x
-            Jmp -> xVal
-            Not -> complement iVal
-            Shl1 -> shiftL iVal 1
-            Shr1 -> shiftR iVal 1
-            Shr4 -> shiftR iVal 4
-            Shr16 -> shiftR iVal 16
-            And -> iVal .&. xVal
-            Or -> iVal .|. xVal
-            Xor -> iVal `xor` xVal
-            Plus -> iVal + xVal
-            If0 -> ite (iVal.==0) aVal bVal
+            Imm x -> ret .== fromIntegral x
+            Jmp -> thmBinary &&& ret .== xVal
+            Not -> ret .== complement iVal
+            Shl1 -> ret .== shiftL iVal 1
+            Shr1 -> ret .== shiftR iVal 1
+            Shr4 -> ret .== shiftR iVal 4
+            Shr16 -> ret .== shiftR iVal 16
+            And -> thmBinary &&& ret .== iVal .&. xVal
+            Or ->  thmBinary &&&ret .== iVal .|. xVal
+            Xor ->  thmBinary &&& ret .== iVal `xor` xVal
+            Plus ->  thmBinary &&&ret .== iVal + xVal
+            If0 ->  thmTriary &&&ret .== ite (iVal.==0) aVal bVal
   return $ last retVars .== beta
         
     
