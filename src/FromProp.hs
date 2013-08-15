@@ -72,7 +72,7 @@ proveOrExampleMasked prop cProg mask = do
 synthesizeProgram :: Int -> [Op] -> ProgramProperty -> IO ()
 synthesizeProgram defaultExSize instSet prop = do
   exs <- getExamples defaultExSize
-  go 1 exs
+  go 30 exs
   where
   getExamples :: Int -> IO [(CVal,CVal)]
   getExamples size = forM [0..size-1] $ \n -> do
