@@ -11,8 +11,6 @@ import Text.Printf
 
 type ProgramProperty = SVal -> SVal -> SBool
 
-myProp :: ProgramProperty
-myProp alpha beta = beta .== ite (alpha .==0) 42 (2*alpha)
 
 
 fromExamples :: Int -> [Op] -> [(CVal,CVal)] -> IO (Maybe CProgram)
@@ -70,6 +68,3 @@ synthesizeProgram instSet prop = go 0 [] where
           Just cePair -> do
             printf "counter example found: %s\n" (show cePair)
             go size (cePair:examples)
-
-testMain :: IO ()
-testMain = synthesizeProgram [Plus, If0, Imm, Jmp] myProp
