@@ -90,11 +90,15 @@ sEval prog alpha = last $ retVals
         Left Alpha -> alpha
         Right (inst,arg) -> ret
           where
+            selectRetVals :: Int -> SVal
+            selectRetVals x
+              | 0<=x && x < ln = retVals !! x
+              | otherwise      = 0
             iVal,xVal,aVal,bVal :: SVal
-            iVal = retVals !! (ln - 1)
-            xVal = retVals !! fromIntegral arg
+            iVal = selectRetVals $ (ln - 1)
+            xVal = selectRetVals $ fromIntegral arg
             (aVal, bVal) = let (a,b) = split arg in 
-              (retVals !! fromIntegral a, retVals !! fromIntegral (b::Word16))
+              (selectRetVals $ fromIntegral a, selectRetVals $ fromIntegral (b::Word16))
             ret :: SVal
             ret = case ((prog^.instructionSet)!! fromIntegral inst) of
               Imm -> fromIntegral $ arg
