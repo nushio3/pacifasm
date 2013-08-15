@@ -25,6 +25,7 @@ library
     containers >= 0.5,
     hspec >=1.5,
     lens >= 3.9.0.2,
+    random,
     safe,
     sbv >=2.10
 

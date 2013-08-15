@@ -16,31 +16,12 @@ data ReservedOp = Alpha
   deriving (Eq, Ord, Read, Show)
 
 data Op 
-  = Imm | Jmp 
+  = Imm CVal | Jmp 
   | Not | Shl1 | Shr1 | Shr4 | Shr16
   | And | Or | Xor | Plus 
   | If0
   deriving (Eq, Ord, Read, Show)
     
-data Arity 
-  = Unary 
-  | Special SWord32 
-  | Binary SWord32 
-  | Triary SWord16 SWord16    
-
-parseArg :: Op -> SVal -> Arity
-parseArg Imm x = Special x
-parseArg Jmp x = Binary x
-parseArg Not _ = Unary
-parseArg Shl1 _ = Unary
-parseArg Shr1 _ = Unary
-parseArg Shr4 _ = Unary
-parseArg Shr16 _ = Unary
-parseArg And x = Binary x
-parseArg Or x = Binary x
-parseArg Xor x = Binary x
-parseArg Plus x = Binary x
-parseArg If0 x = let (y,z) = split x in Triary y z
 
 type SInst = SWord8
 type SVal= SWord32
@@ -70,8 +51,12 @@ prettyPrint prog = unlines ret
     (printf "x%02d = " ln) ++
       case pl of
         Left Alpha -> "alpha"
-        Right (inst,arg) -> printf "%-6s%08x"
-          (show $ (prog^.instructionSet)!!(fromIntegral inst)) arg
+        Right (inst,arg) -> 
+          let instOp = (prog^.instructionSet)!!(fromIntegral inst) in
+          case instOp of
+            Imm n ->  printf "%-6s%08x" "Imm" n
+            _ ->  printf "%-6s%08x"
+              (show $ instOp) arg
         
     
   
@@ -101,7 +86,7 @@ sEval prog alpha = last $ retVals
               (selectRetVals $ fromIntegral a, selectRetVals $ fromIntegral (b::Word16))
             ret :: SVal
             ret = case ((prog^.instructionSet)!! fromIntegral inst) of
-              Imm -> fromIntegral $ arg
+              Imm x -> fromIntegral $ x
               Jmp -> xVal
               Not -> complement iVal
               Shl1 -> shiftL iVal 1
@@ -171,7 +156,7 @@ behave prog runTag (alpha, beta) = do
                              (select retVarsL 0 (extend(a::SWord16))
                              ,select retVarsL 0 (extend(b::SWord16)))
           retCand op = case op of
-            Imm -> arg
+            Imm x -> fromIntegral x
             Jmp -> xVal
             Not -> complement iVal
             Shl1 -> shiftL iVal 1

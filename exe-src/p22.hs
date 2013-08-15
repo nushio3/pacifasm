@@ -3,7 +3,7 @@ import FromProp
 import Data.SBV
 
 main :: IO ()
-main = synthesizeProgram [Plus, Shr1, Shr4, Shr16, Or, Imm, Jmp] myProp
+main = synthesizeProgram 0 [Plus, Shr1, Shr4, Shr16, Or, Imm 0xffffffff, Imm 1, Jmp] myProp
 
 -- round up to the next highest power of 2
 

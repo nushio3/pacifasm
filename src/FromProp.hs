@@ -7,6 +7,7 @@ import Data.List
 import Instack
 
 import Data.SBV
+import System.Random
 import Text.Printf
 
 type ProgramProperty = SVal -> SVal -> SBool
@@ -45,9 +46,46 @@ proveOrExample prop cProg = do
 
       return $ Just (ceAlpha,ceBeta)
 
+proveOrExampleMasked :: ProgramProperty -> CProgram -> CVal -> IO (Maybe (CVal, CVal))
+proveOrExampleMasked prop cProg mask = do
+  msg <- fmap show $ prove $ do
+    alpha <- forall "alpha"
+    return $ (alpha .<= fromIntegral mask) ==> prop alpha (sEval cProg alpha)
+  putStrLn msg
 
-synthesizeProgram :: [Op] -> ProgramProperty -> IO ()
-synthesizeProgram instSet prop = go 0 [] where
+  if
+    | "Q.E.D." `isPrefixOf` msg -> return Nothing
+    | otherwise -> do
+      let ceAlpha :: CVal
+          ceAlpha = read $ (!!2) $ words $ head $ filter ("alpha"`isInfixOf`) $ lines msg
+      msg2 <- fmap show $ sat $ do
+        beta <- exists "beta"
+        return $ prop (fromIntegral ceAlpha) beta
+      putStrLn msg2
+      let ceBeta :: CVal
+          ceBeta = read $ (!!2) $ words $ head $ filter ("beta"`isInfixOf`) $ lines msg2
+
+      return $ Just (ceAlpha,ceBeta)
+
+
+
+synthesizeProgram :: Int -> [Op] -> ProgramProperty -> IO ()
+synthesizeProgram defaultExSize instSet prop = do
+  exs <- getExamples defaultExSize
+  go 1 exs
+  where
+  getExamples :: Int -> IO [(CVal,CVal)]
+  getExamples size = forM [0..size-1] $ \n -> do
+    alpha0 <- randomIO
+    let alpha = (alpha0 .&. complement (fromIntegral $ size-1)) .|. (fromIntegral n)
+    msg2 <- fmap show $ sat $ do
+      beta <- exists "beta"
+      return $ prop (fromIntegral alpha) beta
+    let beta = read $ (!!2) $ words $ head $ filter ("beta"`isInfixOf`) $ lines msg2
+    return (alpha,beta)
+
+
+
   go :: Int -> [(CVal,CVal)] -> IO ()
   go size examples = do
     printf "testing %d %s\n" size (show examples)
@@ -55,16 +93,21 @@ synthesizeProgram instSet prop = go 0 [] where
     case mayProg of
       Nothing -> do
         printf "no program of size %d and instSet %s satisfies the property.\n" size (show instSet)
-        go  (size+1) []
+        exs <- getExamples defaultExSize
+        go  (size+1) exs
       Just prog -> do
         putStrLn "candidate program obtained:"
         putStrLn $ prettyPrint $ prog
         putStrLn "testing for property:"
-        mayCE <- proveOrExample prop prog
-        case mayCE of
-          Nothing -> do
-            putStrLn "program synthesized:"
-            putStrLn $ prettyPrint prog
-          Just cePair -> do
-            printf "counter example found: %s\n" (show cePair)
-            go size (cePair:examples)
+        go2 size examples 1 prog
+
+  go2 size examples mask prog = do
+    mayCE <- proveOrExampleMasked prop prog mask
+    case mayCE of
+      Nothing | mask == maxBound -> do
+        putStrLn "program synthesized:"
+        putStrLn $ prettyPrint prog
+      Nothing -> go2 size examples (2*mask+1) prog
+      Just cePair -> do
+        printf "counter example found: %s\n" (show cePair)
+        go size (cePair:examples)
