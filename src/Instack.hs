@@ -6,17 +6,21 @@ import Control.Applicative
 import Control.Monad
 import Control.Lens hiding ((.<))
 import Control.Lens.TH 
+import Data.List
+import qualified Data.Map as Map
 import Data.SBV
 import Text.Printf
-
+import Safe
 
 data ReservedOp = Alpha
+  deriving (Eq, Ord, Read, Show)
 
 data Op 
   = Imm | Jmp 
   | Not | Shl1 | Shr1 | Shr4 | Shr16
   | And | Or | Xor | Plus 
   | If0
+  deriving (Eq, Ord, Read, Show)
     
 data Arity 
   = Unary 
@@ -45,23 +49,88 @@ type CVal= Word32
      
 
 type SProgram = Program SInst SVal
+type CProgram = Program CInst CVal
 
 data Program instType valType = Program
   { _instructionSet ::[Op]
   , _programLines :: [Either ReservedOp (instType, valType)]
   }
+  deriving (Eq, Ord, Read, Show)
+
   
 makeLenses ''Program
+
+prettyPrint :: CProgram -> String
+prettyPrint prog = unlines ret
+  where
+  ret = 
+    [ printf "f alpha = x%02d" (pred $ length $ prog^.programLines)
+    , "  where"] ++ map ("    "++) bindings
+  bindings = flip map (zip [(0::Int)..] (prog^.programLines) ) $ \ (ln, pl) ->
+    (printf "x%02d = " ln) ++
+      case pl of
+        Left Alpha -> "alpha"
+        Right (inst,arg) -> printf "%-6s%08x"
+          (show $ (prog^.instructionSet)!!(fromIntegral inst)) arg
+        
+    
   
-symbolize :: Program CInst CVal -> Program SInst SVal
+symbolize :: CProgram -> SProgram
 symbolize = programLines %~ (map go)
   where
     go (Left x) = Left x
     go (Right (a,b)) = Right (fromIntegral a, fromIntegral b)
              
-readProgram :: String -> Maybe (Program CInst CVal)
-readProgram str = 
+sEval :: CProgram -> SVal -> SVal
+sEval prog alpha = last $ retVals
   where
+    retVals :: [SVal]
+    retVals = flip map (zip [(0::Int)..] (prog^.programLines)) $ \(ln,pl) ->
+      case pl of
+        Left Alpha -> alpha
+        Right (inst,arg) -> ret
+          where
+            iVal,xVal,aVal,bVal :: SVal
+            iVal = retVals !! (ln - 1)
+            xVal = retVals !! fromIntegral arg
+            (aVal, bVal) = let (a,b) = split arg in 
+              (retVals !! fromIntegral a, retVals !! fromIntegral (b::Word16))
+            ret :: SVal
+            ret = case ((prog^.instructionSet)!! fromIntegral inst) of
+              Imm -> fromIntegral $ arg
+              Jmp -> xVal
+              Not -> complement iVal
+              Shl1 -> shiftL iVal 1
+              Shr1 -> shiftR iVal 1
+              Shr4 -> shiftR iVal 4
+              Shr16 -> shiftR iVal 16
+              And -> iVal .&. xVal
+              Or -> iVal .|. xVal
+              Xor -> iVal `xor` xVal
+              Plus -> iVal + xVal
+              If0 -> ite (iVal.==0) aVal bVal
+
+
+
+
+readProgram :: Int -> [Op] -> String -> Maybe CProgram
+readProgram lnSize instSet resultStr = do --maybe monad
+  True <- Just ("Satisfiable."`isPrefixOf` resultStr)
+  dict <-
+    fmap Map.fromList $
+    sequence $
+    map (\strs -> (,) <$> headMay strs <*> atMay strs 2) $
+    map words $
+    filter (\linestr -> " = "`isInfixOf` linestr) $
+    lines resultStr
+  newPls <- forM [0..lnSize-1]$ \ ln ->
+    case ln of
+      0 -> return $ Left Alpha
+      _ -> do
+        inst<-  Map.lookup (printf "inst-%d" ln) dict >>= readMay
+        arg <-  Map.lookup (printf "arg-%d" ln) dict >>= readMay
+        return $ Right (inst,arg)
+  return $ Program instSet newPls
     
                        
 genProgram :: Int -> [Op] -> Symbolic SProgram
@@ -78,13 +147,13 @@ genProgram lnSize instSet = do
           return $ Right (inst,arg)
   return $ Program instSet pls
   
-behave :: Program SInst SVal -> (SVal, SVal) -> Symbolic SBool
-behave prog (alpha, beta) = do
+behave :: SProgram -> String -> (SVal, SVal) -> Symbolic SBool
+behave prog runTag (alpha, beta) = do
   let progLines = prog^.programLines 
       instSet = prog^.instructionSet
       lnSize = length progLines
   retVars <- forM [0..lnSize-1] $ \ln -> do
-    exists $ printf "val-%d" ln
+    exists $ printf "run%s-val-%d" runTag  ln
   thms <- forM (zip3 [(0::Int)..] (retVars :: [SWord32]) progLines) $ \(ln, ret, pl) ->
     case pl of
       Left Alpha -> constrain $ ret .== alpha
@@ -113,15 +182,6 @@ behave prog (alpha, beta) = do
   return $ last retVars .== beta
         
     
-testMain :: IO ()    
-testMain = do
-  ret <- sat $ do
-    prog <- genProgram 5 [Plus, If0, Imm, Jmp]
-    thms <- mapM (behave prog)
---      [(0,42),(1,3),(3,9),(50,150)]
-      [(0,42),(1,2),(3,6),(50,100)]    
-    return $ bAnd $ thms
-  print ret
   
 {- 
 Expected
