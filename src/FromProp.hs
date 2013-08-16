@@ -68,11 +68,13 @@ proveOrExampleMasked prop cProg mask = do
       return $ Just (ceAlpha,ceBeta)
 
 
+synthesizeProgramDef :: [Op] -> ProgramProperty -> IO ()
+synthesizeProgramDef = synthesizeProgram 1 0
 
-synthesizeProgram :: Int -> [Op] -> ProgramProperty -> IO ()
-synthesizeProgram defaultExSize instSet prop = do
+synthesizeProgram :: Int -> Int -> [Op] -> ProgramProperty -> IO ()
+synthesizeProgram initialSize defaultExSize instSet prop = do
   exs <- getExamples defaultExSize
-  go 1 exs
+  go initialSize exs
   where
   getExamples :: Int -> IO [(CVal,CVal)]
   getExamples size = forM [0..size-1] $ \n -> do

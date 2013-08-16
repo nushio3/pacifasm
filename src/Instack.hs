@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, TupleSections, TypeFamilies #-}
+{-# LANGUAGE MultiWayIf, TemplateHaskell, TupleSections, TypeFamilies #-}
 
 module Instack where
 
@@ -21,7 +21,10 @@ data Op
   | And | Or | Xor | Plus 
   | If0
   deriving (Eq, Ord, Read, Show)
-    
+
+isRom :: Op -> Bool
+isRom (Imm _) = True
+isRom _ = False
 
 type SInst = SWord8
 type SVal= SWord32
@@ -103,7 +106,15 @@ sEval prog alpha = last $ retVals
 
 
 readProgram :: Int -> [Op] -> String -> Maybe CProgram
-readProgram lnSize instSet resultStr = do --maybe monad
+readProgram lnSize instSet0 resultStr = do --maybe monad
+  let instSetSize = length instSet
+      alphaPos = length $ romInstSet
+
+      instSet = romInstSet ++ ramInstSet
+
+      romInstSet =  filter isRom instSet0
+      ramInstSet =  filter (not.isRom) instSet0
+
   True <- Just ("Satisfiable."`isPrefixOf` resultStr)
   dict <-
     fmap Map.fromList $
@@ -114,7 +125,7 @@ readProgram lnSize instSet resultStr = do --maybe monad
     lines resultStr
   newPls <- forM [0..lnSize-1]$ \ ln ->
     case ln of
-      0 -> return $ Left Alpha
+      _ | (ln == alphaPos) -> return $ Left Alpha
       _ -> do
         inst<-  Map.lookup (printf "inst-%d" ln) dict >>= readMay
         arg <-  Map.lookup (printf "arg-%d" ln) dict >>= readMay
@@ -123,16 +134,24 @@ readProgram lnSize instSet resultStr = do --maybe monad
     
                        
 genProgram :: Int -> [Op] -> Symbolic SProgram
-genProgram lnSize instSet = do
+genProgram lnSize instSet0 = do
   let instSetSize = length instSet
+      alphaPos = length $ romInstSet
+
+      instSet = romInstSet ++ ramInstSet
+
+      romInstSet =  filter isRom instSet0
+      ramInstSet =  filter (not.isRom) instSet0
+
   pls <- forM [0..lnSize - 1] $ \ln -> do
-    if ln==0 
-      then return $ Left Alpha
-      else 
-        do 
+    if ln==alphaPos 
+       then return $ Left Alpha
+       else do
           inst <- exists $ printf "inst-%d" ln
           arg  <- exists $ printf "arg-%d" ln
-          constrain $ inst .< fromIntegral instSetSize
+          if ln < alphaPos 
+             then  constrain $ inst .== fromIntegral ln
+             else  constrain $ inst .< fromIntegral instSetSize &&& inst .>= fromIntegral alphaPos
           return $ Right (inst,arg)
   return $ Program instSet pls
   
@@ -155,16 +174,17 @@ behave prog runTag (alpha, beta) = do
           (a,b) = split arg 
           (aVal, bVal) =(select retVarsL 0 (extend(a::SWord16))
                         ,select retVarsL 0 (extend(b::SWord16)))
+          thmUnary = arg .==0
           thmBinary = arg .< fromIntegral ln
           thmTriary = a .< fromIntegral ln &&& b .< fromIntegral ln
           retCand op = case op of
-            Imm x -> ret .== fromIntegral x
+            Imm x -> thmUnary &&& ret .== fromIntegral x
             Jmp -> thmBinary &&& ret .== xVal
-            Not -> ret .== complement iVal
-            Shl1 -> ret .== shiftL iVal 1
-            Shr1 -> ret .== shiftR iVal 1
-            Shr4 -> ret .== shiftR iVal 4
-            Shr16 -> ret .== shiftR iVal 16
+            Not -> thmUnary &&& ret .== complement iVal
+            Shl1 -> thmUnary &&& ret .== shiftL iVal 1
+            Shr1 -> thmUnary &&& ret .== shiftR iVal 1
+            Shr4 -> thmUnary &&& ret .== shiftR iVal 4
+            Shr16 -> thmUnary &&& ret .== shiftR iVal 16
             And -> thmBinary &&& ret .== iVal .&. xVal
             Or ->  thmBinary &&&ret .== iVal .|. xVal
             Xor ->  thmBinary &&& ret .== iVal `xor` xVal
